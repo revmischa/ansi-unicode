@@ -47,6 +47,7 @@ has 'input_filename' => (
     required => 1,
 );
 
+my $fontsize = 13; # px
 my $esc = "\x1b";
 
 *color2mirc_bg = \&color2mirc_fg;
@@ -74,7 +75,7 @@ my %mirc2colormap = (
     1  => 'black',
     2  => 'blue',
     3  => 'green',
-    4  => 'red',
+    4  => '#b00',  # red
     5  => 'brown',
     6  => 'purple',
     7  => 'orange',
@@ -93,7 +94,12 @@ my %mirc2colormap = (
 
 # normal -> high intensity colors (for ANSI 'bold')
 my %color2hi = (
-    '#8F8F00' => 'yellow',
+    '#8F8F00' => 'yellow', # dkyellow
+    'black' => '#777', # grey
+    'white' => '#eee',  # this is sort of a 'wtf'
+    '#b00' => '#f00', # red
+    '#33FF33' => '#7F7', # ltgreen
+    'ltgrey' => '#888',
 );
 
 my %color2mircmap;
@@ -108,124 +114,119 @@ sub convert {
     my $col = 0;
     my $linewrap;
 
-    my @lines = split(/[\n\r]+/, $in);
+    # filter out stuff we don't care about
+    $linewrap ||= $in =~ s/$esc\[.?7h//g; # enable linewrap
 
-    foreach my $ln (@lines) {
-        next unless $ln;
+    # go through each character
+    my $idx = 0;
+    while ($in) {
+        last if $idx >= length $in;
 
-        # filter out stuff we don't care about
-        $linewrap ||= $ln =~ s/$esc\[.?7h//g; # enable linewrap
+        my $c = substr($in, $idx, 1);
+        $idx++;
 
-        # go through each character
-        my $idx = 0;
-        while ($ln) {
-            last if $idx >= length $ln;
-
-            my $c = substr($ln, $idx, 1);
-            $idx++;
-
-            if ($c eq $esc) {
-                # escape sequence, oh noes!
-                my $seq = substr($ln, $idx);
-                if ($seq =~ s/^\[(\d+)?C//) {
-                    # move forward
-                    $col += $1 || 1;
-                } elsif ($seq =~ s/^\[(\d+)?D//) {
-                    # move back
-                    if ($1 && $1 > 254) {
-                        $col = 0;
-                    } else {
-                        $col -= $1 || 1;
-                    }
-                } elsif ($seq =~ s/^\[(\d+)?A//) {
-                    # move up
-                    $row -= $1 || 1;
-                } elsif ($seq =~ s/^\[(\d+)?B//) {
-                    # move down
-                    $row += $1 || 1;
-                } elsif ($seq =~ s/^\[(\d+)m//) {
-                    if ($1 == 0) {
-                        # reset
-                        $colormap[$row][$col] = {fgcolor => 'white', bgcolor => 'black'};
-                    } elsif ($1 < 30) {
-                        # ignore font/color attribute for now
-                    } elsif ($1 >= 30 && $1 < 40) {
-                        $colormap[$row][$col] = {fgcolor => ans2color($1)};
-                    } elsif ($1 >= 40 && $1 < 50) {
-                        $colormap[$row][$col] = {bgcolor => ans2color($1)};
-                    } else {
-                        print STDERR "Unknown ANSI color code: $1\n";
-                    }
-                } elsif ($seq =~ s/^\[(\d*);(\d*);?(\d*)m//) {
-                    my $color_info = {};
-                    my @attrs = ($1, $2, $3);
-                    my $force;
-                    while (@attrs) {
-                        my $attr = shift @attrs;
-                        next if ! defined $attr || $attr eq '';
-
-                        if ($attr == 0) {
-                            # reset
-                            $color_info = {fgcolor => 'white', bgcolor => 'black'};
-                        } elsif ($attr < 30) {
-                            if ($attr == 1) {
-                                # bold, but seems to mean set the fg color to ltgrey if fg and bg are white
-                                #unless (grep { ans2color($_) ne 'black'
-                                #               && ans2color($_) ne 'white' } @attrs) {
-                                    #$color_info->{fgcolor} = 'ltgrey';
-                                    #$color_info->{bgcolor} = 'white';
-                                    #$force = 1;
-                                #}
-                                #$color_info->{bgcolor} = 'black';
-                                $color_info->{bold} = 1;
-                            } else {
-                                #print STDERR "Unhandled attribute $attr\n";
-                            }
-                            # other color/text attribute. ignore for now.
-                        } elsif ($attr < 40) {
-                            # fg
-                            $color_info->{fgcolor} = ans2color($attr) unless $force;
-                        } elsif ($attr < 50) {
-                            #bg
-                            $color_info->{bgcolor} = ans2color($attr) unless $force;
-                        } elsif (! $force) {
-                            print STDERR "Unrecognized ANSI color code: $attr\n";
-                        }
-                    }
-
-                    # don't allow white on white text
-                    if ($color_info->{fgcolor} && $color_info->{bgcolor}) {
-                        $color_info->{fgcolor} = 'ltgrey'
-                            if $color_info->{fgcolor} eq $color_info->{bgcolor};
-                    }
-
-                    $colormap[$row][$col] = $color_info;
-                } elsif ($seq =~ /\[2J/) {
-                    # erase display and reset cursor... okay
-                    $seq = '';
+        if ($c eq $esc) {
+            # escape sequence, oh noes!
+            my $seq = substr($in, $idx);
+            if ($seq =~ s/^\[(\d+)?C//) {
+                # move forward
+                $col += $1 || 1;
+            } elsif ($seq =~ s/^\[(\d+)?D//) {
+                # move back
+                if ($1 && $1 > 254) {
+                    $col = 0;
                 } else {
-                    print STDERR "Unrecognized ANSI escape sequence, chunk='" .
-                        substr($seq, 0, 7) . "'\n";
+                    $col -= $1 || 1;
+                }
+            } elsif ($seq =~ s/^\[(\d+)?A//) {
+                # move up
+                $row -= $1 || 1;
+            } elsif ($seq =~ s/^\[(\d+)?B//) {
+                # move down
+                $row += $1 || 1;
+            } elsif ($seq =~ s/^\[(\d+)m//) {
+                if ($1 == 0) {
+                    # reset
+                    $colormap[$row][$col] = {fgcolor => 'white', bgcolor => 'black'};
+                } elsif ($1 < 30) {
+                    # ignore font/color attribute for now
+                } elsif ($1 >= 30 && $1 < 40) {
+                    $colormap[$row][$col] = {fgcolor => ans2color($1)};
+                } elsif ($1 >= 40 && $1 < 50) {
+                    $colormap[$row][$col] = {bgcolor => ans2color($1)};
+                } else {
+                    print STDERR "Unknown ANSI color code: $1\n";
+                }
+            } elsif ($seq =~ s/^\[(\d*);(\d*);?(\d*)m//) {
+                my $color_info = {};
+                my @attrs = ($1, $2, $3);
+                my $force;
+                while (@attrs) {
+                    my $attr = shift @attrs;
+                    next if ! defined $attr || $attr eq '';
+
+                    if ($attr == 0) {
+                        # reset
+                        $color_info = {fgcolor => 'white', bgcolor => 'black'};
+                    } elsif ($attr < 30) {
+                        if ($attr == 1) {
+                            # bold, but seems to mean set the fg color to ltgrey if fg and bg are white
+                            #unless (grep { ans2color($_) ne 'black'
+                            #               && ans2color($_) ne 'white' } @attrs) {
+                                #$color_info->{fgcolor} = 'ltgrey';
+                                #$color_info->{bgcolor} = 'white';
+                                #$force = 1;
+                            #}
+                            #$color_info->{bgcolor} = 'black';
+                            $color_info->{bold} = 1;
+                        } else {
+                            #print STDERR "Unhandled attribute $attr\n";
+                        }
+                        # other color/text attribute. ignore for now.
+                    } elsif ($attr < 40) {
+                        # fg
+                        # if ($color_info->{bold})
+                        $color_info->{fgcolor} = ans2color($attr) unless $force;
+                    } elsif ($attr < 50) {
+                        #bg
+                        $color_info->{bgcolor} = ans2color($attr) unless $force;
+                    } elsif (! $force) {
+                        print STDERR "Unrecognized ANSI color code: $attr\n";
+                    }
                 }
 
-                # change the rest of $ln past $idx to $seq
-                substr($ln, $idx) = $seq;
-            } elsif ($c eq "\n") {
-                $row++;
-            } elsif ($c eq "\r") {
-                $col = 0;
+                # don't allow white on white text
+                if ($color_info->{fgcolor} && $color_info->{bgcolor}) {
+                    $color_info->{fgcolor} = 'ltgrey'
+                        if $color_info->{fgcolor} eq $color_info->{bgcolor};
+                }
+
+                $colormap[$row][$col] = $color_info;
+            } elsif ($seq =~ /\[2J/) {
+                # erase display and reset cursor... okay
+                $seq = '';
             } else {
-                # otherwise it's a normal char
-                cp437_to_unicode(\$c) if ord($c) > 127;
-                $map[$row][$col] = $c;
-                $col++;
+                print STDERR "Unrecognized ANSI escape sequence, chunk='" .
+                    substr($seq, 0, 7) . "'\n";
             }
 
-            if ($col >= $self->cols) {
-                # linewrap
-                $col = $col % $self->cols;
-                $row++;
-            }
+            # change the rest of $in past $idx to $seq
+            substr($in, $idx) = $seq;
+        } elsif ($c eq "\n") {
+            $row++;
+        } elsif ($c eq "\r") {
+            $col = 0;
+        } else {
+            # otherwise it's a normal char
+            cp437_to_unicode(\$c) if ord($c) > 127;
+            $map[$row][$col] = $c;
+            $col++;
+        }
+
+        if ($col >= $self->cols) {
+            # linewrap
+            $col = $col % $self->cols;
+            $row++;
         }
     }
 
@@ -252,7 +253,7 @@ sub html_output {
     my ($self) = @_;
 
     my $ret = '';
-    $ret .= qq {<table style="font-family: monospace; font-size: 11px;" cellspacing="0" cellpadding="0">} . "\n";
+    $ret .= qq {<table style="font-family: 'Courier New'; font-size: ${fontsize}px;" cellspacing="0" cellpadding="0">} . "\n";
 
     my @map = @{ $self->charmap };
     my @colormap = @{ $self->colormap };
@@ -278,6 +279,7 @@ sub html_output {
 
             if ($color_info->{bold}) {
                 # bold really doesn't mean bold, it means use the high-intensity version of the color
+                # warn "bold: $fgcolor";
                 $fgcolor = color_hi($fgcolor);
             }
 
@@ -295,9 +297,12 @@ sub html_output {
                 $char_uni_html = '&nbsp;';
             } else {
                 # convert char to unicode
-                cp437_to_unicode(\$c);
+                # cp437_to_unicode(\$c);
                 _utf8_on($c);
-                $char_uni_html = '&#' . ord($c) . ';';
+                # _utf8_off($c);
+                # warn "char: $c";
+                $char_uni_html = $c; #'&#' . ord($c) . ';';
+                # warn "ord: " . ord($c);
             }
 
             $td_fgcolor ||= qq{ style="color: $fgcolor"};
@@ -373,6 +378,7 @@ sub irc_output {
 sub cp437_to_unicode {
     my $strref = shift;
     from_to($$strref, "IBM437", "utf8");
+    return;
     #_utf8_on($$strref);
     my $mapped = Encode::encode_utf8($$strref);
     $strref = \$mapped;
@@ -384,7 +390,11 @@ sub cp437_to_unicode {
 # returns the high-intensity version of this color, if available
 sub color_hi {
     my $color = shift;
-    return $color2hi{$color} || $color;
+    my $light = $color2hi{$color};
+    unless ($light) {
+        warn "Failed to find high-intensity version of $color";
+    }
+    return $light || $color;
 }
 
 sub color2mirc_fg {
