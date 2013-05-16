@@ -1,6 +1,5 @@
 package ANSI::Unicode;
 
-use strict;
 use 5.008_005;
 our $VERSION = '0.01';
 
@@ -432,15 +431,13 @@ __END__
 
 =head1 NAME
 
-ANSI::Unicode - Blah blah blah
-
-=head1 SYNOPSIS
-
-  use ANSI::Unicode;
+ANSI::Unicode - ANSI to IRC and HTML converter
 
 =head1 DESCRIPTION
 
-ANSI::Unicode is
+Convert old-school .ANS files from the codepage 437 encoding to unicode.
+
+Outputs colorized unicode as either HTML or IRC-compatible format.
 
 =head1 AUTHOR
 
