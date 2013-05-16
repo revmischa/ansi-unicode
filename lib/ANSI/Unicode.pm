@@ -11,6 +11,21 @@ has 'cols' => (
     default => 80,
 );
 
+has 'rows' => (
+    is => 'rw',
+    isa => 'Int',
+    default => 0,
+);
+
+has 'charmap' => (
+    is => 'rw',
+    isa => 'ArrayRef',
+);
+has 'colormap' => (
+    is => 'rw',
+    isa => 'ArrayRef',
+);
+
 has 'no_color' => (
     is => 'rw',
     isa => 'Bool',
@@ -82,6 +97,7 @@ my %color2mircmap;
 @color2mircmap{values %mirc2colormap} = keys %mirc2colormap;
 
 sub convert {
+    my ($self, $in) = @_;
     my $mirc_last_fg = '';
     my @map = ();
     my @colormap = ();
@@ -89,7 +105,7 @@ sub convert {
     my $col = 0;
     my $linewrap;
 
-    while (my $ln = <$infh>) {
+    while (my $ln = split(/[\n\r]+/, $in)) {
         next unless $ln;
 
         # filter out stuff we don't care about
@@ -208,42 +224,41 @@ sub convert {
         }
     }
 
-    close $infh;
+    $self->rows($row);
+    $self->charmap(\@map);
+    $self->colormap(\@colormap);
 
-    ############ OUTPUT ##############
-    my $outfilename = shift @ARGV;
-    my $output_fh;
-    if ($outfilename) {
-        open($output_fh, ">$outfilename") or die "Could not write to file $outfilename: $!\n";
-    } else {
-        open($output_fh, ">&=", STDOUT);
-    }
-
+    my $out;
     my $format = $self->format;
+
     if ($format eq 'html') {
-        html_output();
+        $out = $self->html_output;
     } elsif ($format eq 'irc') {
         # default
-        irc_output();
+        $out = $self->irc_output;
     } else {
         die "Unknown format $format";
     }
 
-    close $output_fh;
+    return $out;
 }
 
 sub html_output {
-    print $output_fh qq {<table style="font-family: monospace; font-size: 11px;" cellspacing="0" cellpadding="0">} . "\n";
+    my ($self) = @_;
 
-    my $rows = $row;
+    my $ret = '';
+    $ret .= qq {<table style="font-family: monospace; font-size: 11px;" cellspacing="0" cellpadding="0">} . "\n";
+
+    my @map = @{ $self->charmap };
+    my @colormap = @{ $self->colormap };
     my $last_style = '';
     my ($fgcolor, $bgcolor);
     my $color_info = {fgcolor => 'white', bgcolor => 'black'};
 
-    for ($row = 0; $row <= $rows; $row++) {
-        print $output_fh '<tr bgcolor="black">';
+    for (my $row = 0; $row <= $self->rows; $row++) {
+        $ret .= '<tr bgcolor="black">';
 
-        for ($col = 0; $col < $self->cols; $col++) {
+        for (my $col = 0; $col < $self->cols; $col++) {
             my $c = $map[$row][$col];
 
             if ($colormap[$row][$col]) {
@@ -285,28 +300,32 @@ sub html_output {
 
             $td_bgcolor = '' if $bgcolor eq '#000' || $bgcolor eq 'black';
 
-            print $output_fh "<td$td_bgcolor$td_fgcolor>$char_uni_html</td>";
+            $ret .= "<td$td_bgcolor$td_fgcolor>$char_uni_html</td>";
         }
 
-        print $output_fh "</tr>\n";
+        $ret .= "</tr>\n";
     }
 
-    print $output_fh "</table>\n";
+    $ret .= "</table>\n";
+    return $ret;
 }
 
 sub irc_output {
-    my $rows = $row;
+    my ($self, %map) = @_;
+
+    my @map = @{ $self->charmap };
+    my @colormap = @{ $self->colormap };
     my $lastcolor;
     my $ret;
 
     $ret .= colorinfo2mirc({fgcolor => "white", bgcolor => "black"});
     my $color_info;
 
-    for ($row = 0; $row <= $rows; $row++) {
+    for (my $row = 0; $row <= $self->rows; $row++) {
         my $mirc_color;
         my $last_color;
 
-        for ($col = 0; $col < $self->cols; $col++) {
+        for (my $col = 0; $col < $self->cols; $col++) {
             if ($colormap[$row][$col]) {
                 foreach my $attr (qw/ fgcolor bgcolor bold /) {
                     my $newattr = $colormap[$row][$col]->{$attr};
@@ -339,14 +358,10 @@ sub irc_output {
         $ret .= $mirc_color if $mirc_color;
     }
 
-    # dont output utf8 to irssi/whatever, it won't be happy
+    # this might not be right
     _utf8_off($ret);
 
-    my @lines = split("\n", $ret);
-    foreach my $line (@lines) {
-        print $output_fh "$line\n";
-        select undef, undef, undef, 0.05;
-    }
+    return $ret;
 }
 
 # takes strref
