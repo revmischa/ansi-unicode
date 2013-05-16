@@ -1,5 +1,9 @@
 package ANSI::Unicode;
 
+use strict;
+use 5.008_005;
+our $VERSION = '0.01';
+
 use Moose;
 
 use Encode qw (from_to encode _utf8_on _utf8_off);
@@ -421,4 +425,36 @@ sub ans2color {
     return $mirc2colormap{$mirc_color};
 }
 
-__PACKAGE__->meta->make_immutable;
+1;
+__END__
+
+=encoding utf-8
+
+=head1 NAME
+
+ANSI::Unicode - Blah blah blah
+
+=head1 SYNOPSIS
+
+  use ANSI::Unicode;
+
+=head1 DESCRIPTION
+
+ANSI::Unicode is
+
+=head1 AUTHOR
+
+Mischa S. E<lt>revmischa@cpan.orgE<gt>
+
+=head1 COPYRIGHT
+
+Copyright 2013- Mischa Spiegelmock
+
+=head1 LICENSE
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=head1 SEE ALSO
+
+=cut
