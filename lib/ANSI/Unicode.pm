@@ -105,7 +105,9 @@ sub convert {
     my $col = 0;
     my $linewrap;
 
-    while (my $ln = split(/[\n\r]+/, $in)) {
+    my @lines = split(/[\n\r]+/, $in);
+
+    foreach my $ln (@lines) {
         next unless $ln;
 
         # filter out stuff we don't care about

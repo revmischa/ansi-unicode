@@ -40,6 +40,7 @@ my $a2u = ANSI::Unicode->new(%opts);
 my ($infh, $in);
 open($infh, $infilename) or die "Could not open $infilename: $!\n";
 { local $/; $in = <$infh>; close($infh); }
+die "no input" unless $in;
 my $out = $a2u->convert($in) or return;
 
 ############ OUTPUT ##############
