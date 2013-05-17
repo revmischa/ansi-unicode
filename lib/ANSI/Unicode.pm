@@ -73,7 +73,7 @@ $ans2mircmap{49} = 1; # default is black not white for background color
 my %mirc2colormap = (
     0  => 'white',
     1  => 'black',
-    2  => 'blue',
+    2  => '#00c',
     3  => 'green',
     4  => '#b00',  # red
     5  => 'brown',
@@ -100,6 +100,9 @@ my %color2hi = (
     '#b00' => '#f00', # red
     '#33FF33' => '#7F7', # ltgreen
     'ltgrey' => '#888',
+    '#00c' => '#33F', # blue
+    'cyan' => '#4ef',
+    '#FFA0AB' => '#FCB',
 );
 
 my %color2mircmap;
@@ -119,8 +122,9 @@ sub convert {
 
     # go through each character
     my $idx = 0;
-    while ($in) {
-        last if $idx >= length $in;
+    my $cur = $in;
+    while (length($cur)) {
+        last if $idx >= length($cur);
 
         my $c = substr($in, $idx, 1);
         $idx++;
@@ -128,6 +132,7 @@ sub convert {
         if ($c eq $esc) {
             # escape sequence, oh noes!
             my $seq = substr($in, $idx);
+            # warn "seq: $seq";
             if ($seq =~ s/^\[(\d+)?C//) {
                 # move forward
                 $col += $1 || 1;
@@ -136,14 +141,32 @@ sub convert {
                 if ($1 && $1 > 254) {
                     $col = 0;
                 } else {
-                    $col -= $1 || 1;
+                    my $back = $1 || 1;
+                    if ($col - $back < 0) {
+                        warn "tried to set negative col: $back";
+                    } else {
+                        $col -= $back;
+                    }
                 }
+            } elsif ($seq =~ s/^\[s//) {
+                # save pos
+            } elsif ($seq =~ s/^\[u//) {
+                # load pos
             } elsif ($seq =~ s/^\[(\d+)?A//) {
                 # move up
-                $row -= $1 || 1;
+                my $up = $1 || 1;
+                if ($row - $up < 0) {
+                    warn "tried to set negative row: $up";
+                } else {
+                    $row -= $up;
+                }
             } elsif ($seq =~ s/^\[(\d+)?B//) {
                 # move down
                 $row += $1 || 1;
+            } elsif ($seq =~ s/^\[(\d+);(\d+)H//) {
+                # set position
+                $row = $1;
+                $col = $2;
             } elsif ($seq =~ s/^\[(\d+)m//) {
                 if ($1 == 0) {
                     # reset
@@ -210,8 +233,10 @@ sub convert {
                     substr($seq, 0, 7) . "'\n";
             }
 
-            # change the rest of $in past $idx to $seq
-            substr($in, $idx) = $seq;
+            # change the rest of the current sequence past $idx to $seq
+            my $seqlen = length($in) - length($seq) - $idx;
+            $idx += $seqlen;
+            # substr($cur, $idx + $seqlen) = $seq;
         } elsif ($c eq "\n") {
             $row++;
         } elsif ($c eq "\r") {
