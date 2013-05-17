@@ -1,6 +1,6 @@
 use strict;
 use Test::More;
-use ansi::unicode;
+use ANSI::Unicode;
 
 # replace with the actual test
 ok 1;
